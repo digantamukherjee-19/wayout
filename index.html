@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#070a12">
+  <title>WAY OUT — 3D Escape Room</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="libs/three.min.js"></script>
+</head>
+<body>
+
+  <!-- 3D WEBGL CANVAS -->
+  <canvas id="webgl-canvas"></canvas>
+
+  <!-- RETICLE / CROSSHAIR -->
+  <div id="crosshair" class="crosshair"></div>
+
+  <!-- HUD TOP BAR (Visible only during active gameplay) -->
+  <header id="hud-top" class="hud-top hidden">
+    <!-- TIMER VISIBLE AT TOP-LEFT (Section 13) -->
+    <div class="hud-timer">
+      <span class="timer-tag">TIME</span>
+      <span id="timer-display" class="timer-digits">05:00</span>
+    </div>
+    <div class="hud-title">WAY OUT</div>
+  </header>
+
+  <!-- NARRATOR PANEL (ALWAYS VISIBLE IN TOP-RIGHT CORNER - Section 14) -->
+  <aside id="narrator-panel" class="narrator-panel hidden" aria-label="Narrator">
+    <div class="narrator-header">
+      <span class="narrator-title">NARRATOR</span>
+      <span class="narrator-hint">[LOG]</span>
+    </div>
+    <div id="narrator-current-text" class="narrator-current-text">
+      "Look around carefully..."
+    </div>
+  </aside>
+
+  <!-- ITEM PICKUP TOAST NOTIFICATION (Section 10) -->
+  <div id="pickup-toast" class="pickup-toast hidden" aria-live="polite">
+    <div id="pickup-toast-title" class="pickup-toast-title">CROWBAR</div>
+    <div id="pickup-toast-sub" class="pickup-toast-sub">Added to inventory</div>
+  </div>
+
+  <!-- IN-GAME INTERACTION PROMPT (Section 16) -->
+  <div id="interact-prompt" class="interact-prompt hidden">
+    <span id="interact-prompt-text">[ SELECT ] Object</span>
+  </div>
+
+  <!-- BOTTOM DOCK: D-PAD, INVENTORY & ACTIONS (Section 7, 8, 24) -->
+  <footer id="bottom-dock" class="bottom-dock hidden">
+    <!-- 4-Arrow Steering Controls -->
+    <div class="mobile-dpad">
+      <button id="ctrl-up" class="dpad-btn up" aria-label="Move Forward">▲</button>
+      <div class="dpad-row">
+        <button id="ctrl-left" class="dpad-btn left" aria-label="Rotate Left">◀</button>
+        <button id="ctrl-down" class="dpad-btn down" aria-label="Move Backward">▼</button>
+        <button id="ctrl-right" class="dpad-btn right" aria-label="Rotate Right">▶</button>
+      </div>
+    </div>
+
+    <!-- Permanent Inventory Bar -->
+    <div class="inventory-bar">
+      <div class="inventory-tag">INVENTORY</div>
+      <div id="inventory-slots" class="inv-items">
+        <!-- Acquired items permanently rendered here -->
+      </div>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="action-buttons">
+      <button id="btn-interact" class="action-btn interact-btn" aria-label="Select">SELECT</button>
+      <button id="btn-back" class="action-btn back-btn" aria-label="Back">BACK</button>
+    </div>
+  </footer>
+
+  <!-- ==================== INTRO STARTUP SEQUENCE ==================== -->
+
+  <!-- SCREEN 1: 2-SECOND TITLE SCREEN (Section 11) -->
+  <div id="screen-title-2s" class="startup-screen title-screen-center">
+    <h1 class="cinematic-title">WAY OUT</h1>
+  </div>
+
+  <!-- INTRO VIDEO SCREEN (Plays immediately after Title Screen) -->
+  <div id="screen-intro-video" class="startup-screen video-screen-backdrop hidden">
+    <video id="video-intro" class="fullscreen-video" playsinline preload="auto">
+      <source src="video/intro%20video.mp4" type="video/mp4">
+      Your browser does not support the video tag.
+    </video>
+  </div>
+
+  <!-- SCREEN 2: OPENING STORY SCREEN (Appears only after intro video finishes) -->
+  <div id="screen-opening-story" class="startup-screen modal-backdrop hidden">
+    <div class="story-container">
+      <h2 class="story-title">WAY OUT</h2>
+      <div class="story-divider"></div>
+      <p class="story-paragraph">
+        THE MAD DOCTOR KIDNAPED ME WHILE I WAS COMING HOME FROM SCHOOL, HE PUT THIS STRANGE COLLER AND SET A TIMER OF 5 MINUTES , IT IS GETTING TIGHTER WITH TIME......I HAVE TO FIND A WAY OUT OF THIS SITUATION OR I WILL JUST DIE OUT OF SUFFOCATION
+      </p>
+      <div class="story-actions">
+        <button id="btn-story-next" class="btn-primary">[ NEXT ]</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SCREEN 3: START GAME SCREEN -->
+  <div id="screen-start-game" class="startup-screen modal-backdrop hidden">
+    <div class="story-container start-game-card">
+      <h1 class="cinematic-title-large">WAY OUT</h1>
+      <p class="start-subtext">A 3D First-Person Mystery Escape</p>
+      <div class="story-actions">
+        <button id="btn-start-game" class="btn-primary start-btn">[ START GAME ]</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== DEATH FADE & GAME OVER ==================== -->
+
+  <!-- SLOW BLACK SCREEN DEATH FADE OVERLAY (>= 3 SECONDS) -->
+  <div id="death-fade-overlay" class="death-fade-overlay hidden"></div>
+
+  <!-- GAME OVER SCREEN (With TRY AGAIN) -->
+  <div id="modal-game-over" class="modal-backdrop hidden">
+    <div class="game-over-box">
+      <h1 class="game-over-header">GAME OVER</h1>
+      <p class="game-over-desc">The clock struck zero. Darkness settled over the locked observation room.</p>
+      <div class="story-actions">
+        <button id="btn-restart-game-over" class="btn-primary">[ TRY AGAIN ]</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== IN-GAME MODALS ==================== -->
+
+  <!-- NARRATOR MESSAGE HISTORY MODAL (Section 15) -->
+  <div id="modal-narrator-history" class="modal-backdrop hidden">
+    <div class="narrator-history-box">
+      <div class="history-box-header">
+        <h3 class="history-title">NARRATOR</h3>
+        <span class="history-subtitle">MESSAGE LOG</span>
+      </div>
+      <div id="narrator-history-list" class="narrator-history-list">
+        <!-- Full conversation history -->
+      </div>
+      <div class="story-actions">
+        <button id="btn-close-narrator-history" class="btn-primary">[ CLOSE ]</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- INVENTORY ITEM INSPECTION MODAL (Section 11) -->
+  <div id="modal-item-inspect" class="modal-backdrop hidden">
+    <div class="item-inspect-box">
+      <div class="item-inspect-header">
+        <div id="inspect-item-icon" class="inspect-icon-wrap"></div>
+        <h3 id="inspect-item-name">ITEM NAME</h3>
+      </div>
+      <div class="item-inspect-body">
+        <div id="inspect-phone-screen" class="phone-casing hidden">
+          <div class="phone-screen">
+            <div class="phone-carrier">EMERGENCY CARRIER</div>
+            <div class="phone-time">11:11 PM</div>
+            <div class="phone-sub">1 UNREAD NOTIFICATION</div>
+          </div>
+        </div>
+        <p id="inspect-item-desc">Item description goes here.</p>
+      </div>
+      <div class="story-actions">
+        <button id="btn-close-item-inspect" class="btn-primary">[ BACK ]</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PHONE EXAMINATION MODAL (11:11 PM Clue) -->
+  <div id="modal-examine-phone" class="modal-backdrop modal-examine hidden">
+    <div class="examine-box">
+      <div class="examine-header">
+        <h3>EXAMINE: OLD PHONE</h3>
+      </div>
+      <div class="phone-casing">
+        <div class="phone-screen">
+          <div class="phone-carrier">EMERGENCY CARRIER</div>
+          <div class="phone-time">11:11 PM</div>
+          <div class="phone-sub">1 UNREAD NOTIFICATION</div>
+        </div>
+      </div>
+      <p class="examine-desc">The green illuminated display clearly reads: <strong>11:11 PM</strong></p>
+      <div class="story-actions">
+        <button id="btn-close-phone" class="btn-secondary">[ BACK ]</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN EXIT DOOR MODAL (EXACTLY TWO SECTIONS ONLY) (Section 7, 8, 9) -->
+  <div id="modal-door-console" class="modal-backdrop modal-door hidden">
+    <div class="door-box">
+      <div class="door-box-header">
+        <h3>MAIN EXIT DOOR</h3>
+      </div>
+
+      <!-- SECTION 1 — PIN / CODE -->
+      <section class="door-section">
+        <div class="door-sec-header">
+          <span class="sec-label">SECTION 1 — PIN / CODE</span>
+          <span id="door-sec1-status" class="sec-status">LOCK 1 — LOCKED</span>
+        </div>
+        <div class="pin-row">
+          <input type="text" id="door-pin-input" maxlength="4" placeholder="----" autocomplete="off" inputmode="numeric">
+          <button id="btn-door-pin-submit" class="btn-sec-action">ENTER</button>
+        </div>
+      </section>
+
+      <!-- SECTION 2 — ACCESS CARD -->
+      <section class="door-section">
+        <div class="door-sec-header">
+          <span class="sec-label">SECTION 2 — ACCESS CARD</span>
+          <span id="door-sec2-status" class="sec-status">FINAL LOCK — LOCKED</span>
+        </div>
+        <div class="card-row">
+          <button id="btn-door-card-submit" class="btn-sec-action full-width">[ USE ACCESS CARD ]</button>
+        </div>
+      </section>
+
+      <div id="door-feedback" class="door-feedback"></div>
+
+      <div class="story-actions">
+        <button id="btn-close-door" class="btn-secondary">[ BACK ]</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== ENDING SEQUENCE ==================== -->
+
+  <!-- OUTRO VIDEO SCREEN (Plays immediately after door opening upon successful escape) -->
+  <div id="screen-outro-video" class="startup-screen video-screen-backdrop hidden">
+    <video id="video-outro" class="fullscreen-video" playsinline preload="auto">
+      <source src="video/outro%20video.mp4" type="video/mp4">
+      Your browser does not support the video tag.
+    </video>
+  </div>
+
+  <!-- ENDING STORY MODAL (Appears after outro video finishes) -->
+  <div id="modal-ending" class="modal-backdrop hidden">
+    <div class="ending-box">
+      <div class="ending-dialogue">
+        <p>WHEN HE CAME OUT OF THE ROOM SUDDENLY HE FELT A PULL FROM BEHIND.</p>
+        <p>IT WAS A DOCTOR....</p>
+        <div class="doctor-quote">
+          <span class="doctor-tag">THE DOCTOR :</span>
+          <p>"THIS MAD ONE IS AGAIN TRYING TO ESCAPE FROM THIS ROOM.... DOESN'T MATTER HOW MUCH I HIDE THINGS FROM THIS PERSON.... HE ESCAPES EVERYTIME.....NOW I WILL HIDE THINGS IN SUCH A WAY THAT EVEN I WILL NOT FIND IT IN NEED....GO ON, I CHALLENGE YOU TO FIND THE WAY OUT"</p>
+        </div>
+      </div>
+      <div class="story-actions">
+        <button id="btn-ending-next" class="btn-primary">[ NEXT ]</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- FINAL MESSAGE SCREEN -->
+  <div id="modal-final-message" class="modal-backdrop hidden">
+    <div class="final-box">
+      <h2 class="final-quote-text">
+        SOMETIMES WHAT WE THINK AND WHAT WE SEE MAY NOT MATCH WITH THE WORLD BUT WE MUST KEEP TRYING
+      </h2>
+      <div class="final-actions-row">
+        <button id="btn-play-again-final" class="btn-primary">[ PLAY AGAIN ]</button>
+        <button id="btn-exit-final" class="btn-secondary">[ EXIT ]</button>
+      </div>
+      <p id="exit-fallback-msg" class="exit-fallback-msg hidden">You can close this tab to exit.</p>
+    </div>
+  </div>
+
+  <script type="module" src="src/game.js"></script>
+</body>
+</html>

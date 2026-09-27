@@ -1,0 +1,20 @@
+{
+  "name": "wayout",
+  "version": "1.0.0",
+  "description": "WAY OUT - 3D First-Person Mystery Escape Room Game",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node tests/auditDomIds.js && node tests/testRoom3DObjects.js && node tests/testSequentialPuzzleChain.js && node tests/test3DFlowSimulation.js && node tests/testVideoAndGameOverFlow.js"
+  },
+  "keywords": [
+    "escape-room",
+    "threejs",
+    "3d-game",
+    "first-person",
+    "puzzle"
+  ],
+  "author": "digantamukherjee-19",
+  "license": "MIT"
+}
